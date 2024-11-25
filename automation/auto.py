@@ -52,8 +52,117 @@ class GmailApp:
         refresh_btn = ttk.Button(self.root, text="Refresh", command=self.fetch_emails)
         refresh_btn.pack(pady=5)
         
+        # Send Email button
+        send_email_btn = ttk.Button(self.root, text="Send Email", command=self.open_email_composer)
+        send_email_btn.pack(pady=5)
+        
         # Bind double-click event
         self.tree.bind('<Double-1>', self.show_email_content)
+
+
+    def open_email_composer(self):
+        """
+        Open a new window to compose and send an email.
+        """
+        def handle_send():
+            # Get inputs
+            recipient = to_entry.get().strip()
+            subject = subject_entry.get().strip()
+            body = body_text.get("1.0", tk.END).strip()
+            
+            if not recipient or not subject or not body:
+                # Show error if any field is empty
+                messagebox.showerror("Error", "All fields (To, Subject, Message) must be filled.")
+                return
+            
+            # Call the send_email method
+            success = self.send_email(recipient, subject, body)
+            if success:
+                # Close the composer window on success
+                composer_window.destroy()
+
+        composer_window = tk.Toplevel(self.root)
+        composer_window.title("Compose Email")
+        composer_window.geometry("500x400")
+        
+        # Fields for recipient, subject, and body
+        ttk.Label(composer_window, text="To:").pack(anchor=tk.W, padx=10, pady=5)
+        to_entry = ttk.Entry(composer_window, width=50)
+        to_entry.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Label(composer_window, text="Subject:").pack(anchor=tk.W, padx=10, pady=5)
+        subject_entry = ttk.Entry(composer_window, width=50)
+        subject_entry.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Label(composer_window, text="Message:").pack(anchor=tk.W, padx=10, pady=5)
+        body_text = tk.Text(composer_window, height=15)
+        body_text.pack(fill=tk.BOTH, padx=10, pady=5, expand=True)
+        
+        # Send button
+        send_btn = ttk.Button(
+            composer_window, 
+            text="Sendi", 
+            command=handle_send
+        )
+        send_btn.pack(pady=10)
+
+        labeli = ttk.Label(composer_window, text="Note: Please enter the email address in the 'To' field")
+        labeli.pack(pady=5)
+
+    def send_email(self, recipient, subject, body):
+        """
+        Send an email using the Gmail API.
+        """
+        try:
+            # Create email structure
+            from email.mime.text import MIMEText
+            import base64
+
+            message = MIMEText(body)
+            message['to'] = recipient
+            message['subject'] = subject
+
+            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+            create_message = {'raw': raw_message}
+
+            # Use Gmail API to send the email
+            self.service.users().messages().send(userId="me", body=create_message).execute()
+
+            messagebox.showinfo("Success", "Email sent successfully!")
+            return True
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to send email: {e}")
+            return False
+
+
+
+    def send_email(self, recipient, subject, message_body):
+        """
+        Send an email using the Gmail API.
+        """
+        try:
+            # Create the email content
+            message = MIMEMultipart()
+            message['to'] = recipient
+            message['from'] = "me"
+            message['subject'] = subject
+            
+            # Add the message body
+            message.attach(MIMEText(message_body, 'plain'))
+            
+            # Encode the email
+            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+            create_message = {'raw': raw_message}
+            
+            # Send the email
+            send_message = self.service.users().messages().send(userId="me", body=create_message).execute()
+            print(f"Email sent successfully to {recipient}")
+            messagebox.showinfo("Success", f"Email sent successfully to {recipient}")
+        
+        except Exception as e:
+            print(f"An error occurred while sending email: {e}")
+            messagebox.showerror("Error", f"Failed to send email: {e}")
+
     
     
     def authenticate(self):

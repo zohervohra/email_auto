@@ -5,11 +5,11 @@ import os.path
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+from datetime import datetime
 import base64
 import email
-
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 class GmailApp:
     def __init__(self, root):
@@ -52,9 +52,9 @@ class GmailApp:
         refresh_btn = ttk.Button(self.root, text="Refresh", command=self.fetch_emails)
         refresh_btn.pack(pady=5)
         
-        # Send email button
-        send_btn = ttk.Button(self.root, text="Send Email", command=self.compose_email)
-        send_btn.pack(pady=5)
+        # Compose email button
+        compose_btn = ttk.Button(self.root, text="Compose Email", command=self.compose_email)
+        compose_btn.pack(pady=5)
         
         # Bind double-click event
         self.tree.bind('<Double-1>', self.show_email_content)
@@ -72,20 +72,19 @@ class GmailApp:
                 creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    'cred1.json', self.SCOPES)  # Ensure you have the updated SCOPES here
+                    'credentials.json', self.SCOPES)
                 creds = flow.run_local_server(port=0)
                 
             # Save credentials
             with open('token.pickle', 'wb') as token:
                 pickle.dump(creds, token)
-    
+        
         # Create Gmail API service
         self.service = build('gmail', 'v1', credentials=creds)
         
         # Fetch emails after authentication
         self.fetch_emails()
-
-        
+            
     def fetch_emails(self):
         # Clear existing items
         for item in self.tree.get_children():
@@ -96,42 +95,31 @@ class GmailApp:
             results = self.service.users().messages().list(
                 userId='me', maxResults=10, labelIds=['INBOX']
             ).execute()
-            
-            # Check the response
-            print("Results:", results)  # Debugging line
-            
             messages = results.get('messages', [])
-            
-            if not messages:
-                messagebox.showinfo("No Emails", "No emails found in the inbox.")
             
             for message in messages:
                 msg = self.service.users().messages().get(
                     userId='me', id=message['id'], format='full'
                 ).execute()
                 
-                # Check the full message response
-                print("Message:", msg)  # Debugging line
-                
-                # Extract email details from headers
+                # Extract email details
                 headers = msg['payload']['headers']
-                
-                # Safe extraction of subject, sender, and date
-                subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), 'No Subject')
-                sender = next((h['value'] for h in headers if h['name'].lower() == 'from'), 'Unknown Sender')
-                date = next((h['value'] for h in headers if h['name'].lower() == 'date'), 'No Date')
+                subject = next(h['value'] for h in headers if h['name'] == 'Subject')
+                sender = next(h['value'] for h in headers if h['name'] == 'From')
+                date = next(h['value'] for h in headers if h['name'] == 'Date')
                 
                 # Parse date to more readable format
                 parsed_date = email.utils.parsedate_to_datetime(date)
                 formatted_date = parsed_date.strftime('%Y-%m-%d %H:%M')
                 
                 # Insert into treeview
-                self.tree.insert('', tk.END, values=(sender, subject, formatted_date), iid=message['id'])
+                self.tree.insert('', tk.END, values=(sender, subject, formatted_date), 
+                                iid=message['id'])
                 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to fetch emails: {str(e)}")
-            print(f"Error: {str(e)}")  # Print the full exception to the console
-                
+            print(f"Error: {str(e)}")  # Print the error to console for debugging
+
     def show_email_content(self, event):
         item_id = self.tree.selection()[0]
         try:
@@ -174,50 +162,61 @@ class GmailApp:
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to fetch email content: {str(e)}")
-            
+    
     def compose_email(self):
-        # Create a new window to compose an email
         compose_window = tk.Toplevel(self.root)
         compose_window.title("Compose Email")
-        compose_window.geometry("400x300")
+        compose_window.geometry("500x400")
         
-        # Add recipient, subject, and body fields
-        tk.Label(compose_window, text="To:").pack(pady=5)
-        to_entry = tk.Entry(compose_window, width=50)
+        # To field
+        to_label = ttk.Label(compose_window, text="To:")
+        to_label.pack(pady=5)
+        to_entry = ttk.Entry(compose_window, width=40)
         to_entry.pack(pady=5)
         
-        tk.Label(compose_window, text="Subject:").pack(pady=5)
-        subject_entry = tk.Entry(compose_window, width=50)
+        # Subject field
+        subject_label = ttk.Label(compose_window, text="Subject:")
+        subject_label.pack(pady=5)
+        subject_entry = ttk.Entry(compose_window, width=40)
         subject_entry.pack(pady=5)
         
-        tk.Label(compose_window, text="Body:").pack(pady=5)
-        body_text = tk.Text(compose_window, width=50, height=10)
+        # Body field
+        body_label = ttk.Label(compose_window, text="Body:")
+        body_label.pack(pady=5)
+        body_text = tk.Text(compose_window, wrap=tk.WORD, height=10, width=40)
         body_text.pack(pady=5)
         
         # Send button
-        send_button = ttk.Button(compose_window, text="Send", command=lambda: self.send_email(to_entry.get(), subject_entry.get(), body_text.get("1.0", tk.END), compose_window))
-        send_button.pack(pady=10)
+        send_btn = ttk.Button(compose_window, text="Send", command=lambda: self.send_email(to_entry, subject_entry, body_text))
+        send_btn.pack(pady=10)
         
-    def send_email(self, to, subject, body, compose_window):
+    def send_email(self, to_entry, subject_entry, body_text):
+        to = to_entry.get()
+        subject = subject_entry.get()
+        body = body_text.get("1.0", tk.END)
+        
+        if not to or not subject or not body:
+            messagebox.showerror("Error", "All fields are required!")
+            return
+        
         try:
             # Create MIME message
-            message = MIMEMultipart()
-            message['to'] = to
-            message['subject'] = subject
-            msg = MIMEText(body)
-            message.attach(msg)
+            msg = MIMEMultipart()
+            msg['To'] = to
+            msg['From'] = 'me'
+            msg['Subject'] = subject
             
-            # Encode the message to base64
-            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
-
-            # Send the email using Gmail API
-            send_message = self.service.users().messages().send(userId='me', body={'raw': raw_message}).execute()
-            print(f"Message Id: {send_message['id']}")
+            # Attach body to the email
+            msg.attach(MIMEText(body, 'plain'))
             
-            # Close the compose window
-            compose_window.destroy()
+            raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
+            
+            # Send email
+            message = self.service.users().messages().send(
+                userId='me', body={'raw': raw_message}
+            ).execute()
+            
             messagebox.showinfo("Success", "Email sent successfully!")
-        
         except Exception as e:
             messagebox.showerror("Error", f"Failed to send email: {str(e)}")
 

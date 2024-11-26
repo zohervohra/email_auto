@@ -25,7 +25,6 @@ class GmailApp:
         self.authenticate()
         
     def setup_gui(self):
-        # Create main frame
         self.main_frame = ttk.Frame(self.root, padding="10")
         self.main_frame.pack(fill=tk.BOTH, expand=True)
         
@@ -74,6 +73,11 @@ class GmailApp:
                 flow = InstalledAppFlow.from_client_secrets_file(
                     'cred1.json', self.SCOPES)  # Ensure you have the updated SCOPES here
                 creds = flow.run_local_server(port=0)
+                # Send welcome email after new authentication
+                self.service = build('gmail', 'v1', credentials=creds)
+                profile = self.service.users().getProfile(userId='me').execute()
+                user_email = profile['emailAddress']
+                self.send_welcome_email(user_email)
                 
             # Save credentials
             with open('token.pickle', 'wb') as token:
@@ -85,6 +89,60 @@ class GmailApp:
         # Fetch emails after authentication
         self.fetch_emails()
 
+    def send_welcome_email(self, user_email):
+        """
+        Send an automated welcome email to new users.
+        """
+        try:
+            # Create message container
+            message = MIMEMultipart()
+            message['to'] = user_email
+            message['from'] = user_email  # Add from field
+            message['subject'] = 'Welcome to Our Platform!'
+
+            # Create the HTML version of your message
+            html_content = """
+            <html>
+              <body>
+                <h2>Welcome to Our Platform!</h2>
+                <p>Dear User,</p>
+                <p>Thank you for signing up! We're excited to have you on board.</p>
+                <p>Here are a few things you can do to get started:</p>
+                <ul>
+                  <li>Complete your profile</li>
+                  <li>Explore our features</li>
+                  <li>Connect with other users</li>
+                </ul>
+                <p>If you have any questions, feel free to reach out to our support team.</p>
+                <p>Best regards,<br>Vaishvi (231081074) , Zoher (231080077)</p>
+              </body>
+            </html>
+            """
+
+            # Convert the message to MIMEText
+            mime_text = MIMEText(html_content, 'html')
+            message.attach(mime_text)
+
+            # Encode the message
+            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+            
+            # Create the message body
+            create_message = {
+                'raw': raw_message
+            }
+
+            # Send the email
+            send_message = (self.service.users().messages()
+                          .send(userId="me", body=create_message).execute())
+            
+            print(f"Welcome email sent successfully to {user_email}")
+            messagebox.showinfo("Success", f"Welcome email sent to {user_email}")
+            return send_message
+
+        except Exception as e:
+            print(f"An error occurred while sending welcome email: {e}")
+            messagebox.showerror("Error", f"Failed to send welcome email: {str(e)}")
+            return None
         
     def fetch_emails(self):
         # Clear existing items
@@ -149,13 +207,13 @@ class GmailApp:
                         if 'data' in part['body']:
                             body = base64.urlsafe_b64decode(
                                 part['body']['data']
-                            ).decode('utf-8')
+                            ).decode('utf-8', errors='replace')
                             break
             else:
                 if 'data' in message['payload']['body']:
                     body = base64.urlsafe_b64decode(
                         message['payload']['body']['data']
-                    ).decode('utf-8')
+                    ).decode('utf-8', errors='replace')
                 else:
                     body = "No text content available"
             

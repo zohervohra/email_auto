@@ -9,6 +9,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import base64
 import email
+import emoji
 
 
 class GmailApp:
@@ -155,6 +156,22 @@ class GmailApp:
         body_text.pack(pady=5)
         send_button = ttk.Button(compose_window, text="Send", command=lambda: self.send_email(to_entry.get(), subject_entry.get(), body_text.get("1.0", tk.END), compose_window))
         send_button.pack(pady=10)
+       
+        emoji_button = ttk.Button(compose_window, text= emoji.emojize(':thumbs_up:'), command=lambda: self.add_emoji(body_text))
+        emoji_button.pack(pady=5)
+
+        emoji_button = ttk.Button(compose_window, text= emoji.emojize(':red_heart:'), command=lambda: self.add_emoji_heart(body_text))
+        emoji_button.pack(pady=5)
+
+
+        
+       
+        # tk.Label(compose_window, text= ).pack(pady=5)
+    def add_emoji(self, body_text):
+        body_text.insert(tk.END, emoji.emojize(':thumbs_up:'))
+
+    def add_emoji_heart(self, body_text):
+        body_text.insert(tk.END, emoji.emojize(':red_heart:'))
 
     def send_email(self, to, subject, body, compose_window):
         try:
